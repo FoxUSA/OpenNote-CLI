@@ -1,5 +1,6 @@
 const program = require("caporal");
 const PouchDB = require("pouchdb");
+const uuidv4 = require("uuid/v4");
 const fs = require("fs");
 const package_json = require(`${__dirname}/package.json`); // Yes you can do this. Go scream in a stlye gide somewhere if you have a problem with it
 const StorageService = require("../OpenNote-SharedServices/storage.service.js");
@@ -9,7 +10,7 @@ if (typeof localStorage === "undefined" || localStorage === null) {
     localStorage = new LocalStorage("./openNote");
 }
 
-const syncService = require(`${__dirname}/Services/sync.service.js`)(localStorage, PouchDB, fs, StorageService);
+const syncService = require(`${__dirname}/Services/sync.service.js`)(localStorage, PouchDB, fs, StorageService,uuidv4);
 let logError = (error) => {
     console.error(error);
 };
@@ -26,8 +27,6 @@ program .command("sync")
             syncService.sync().then(()=>{
                 if(args.mode=="write")
                     syncService.makeFiles(`${__dirname}/testingNotes/`);//FIXME maybe a setup command to figure this path out
-                else
-                    syncService.returnMap();//FIXME just testing in support of diff method
 
             }).catch(logError);
         });
@@ -44,13 +43,19 @@ program .command("config")
 //Delta command
 program .command("delta")
         .action(() => {
-            syncService.delta(`${__dirname}/testingNotes/`);//FIXME
+            syncService.delta(`${__dirname}/testingNotes/`).then((data)=>{//FIXME path
+                console.log(JSON.stringify(data.delta, null, 4));
+            });
         });
-
     // TODO push command that acts like git adding and committing a given path
 
-//TODO diff
-//TODO save and optinally sync
+//Save command
+program .command("save")
+        .action(() => {
+            //TODO optinally and sync
+            syncService.save(`${__dirname}/testingNotes/`);//FIXME path
+        });
+
 //Execute
 program.parse(process.argv);//Actually let caporal do its thing
 

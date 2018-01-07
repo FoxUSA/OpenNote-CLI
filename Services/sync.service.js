@@ -1,4 +1,40 @@
-module.exports = function(localStorage, PouchDB, fs, StorageService) {
+//ENUM
+const DIFF_TYPES = {
+    NOT_IN_FS: "Not in FS",
+    NOT_IN_DB: "Not in DB",
+    DIFFERS: "Differs"
+};
+
+/**
+ * [delta description]
+ * @param  {[type]} databaseDump - database map
+ * @param  {[type]} fsMap        - fs map
+ * @return {Map}                 - Map in the form of path and difference note
+ */
+let delta = (databaseDump, fsMap)=>{
+    let returnArray = {};
+
+    /**
+     * Come up with delta map from a and b. Thin ven diagram. Give us the stuff not in the middle.
+     * @param  {[type]} a         -
+     * @param  {[type]} b         -
+     * @param  {[type]} errorText -
+     */
+    let deltaScanner = (a, b, errorText)=>{
+        for(let path in a)
+            if(!b[path])//Is the path even there?
+                returnArray[path]=errorText;
+            else if((path[path.length-1]!="/" && a[path].doc.note!=b[path].doc.note))
+                returnArray[path]=DIFF_TYPES.DIFFERS;
+    };
+
+    deltaScanner(databaseDump,fsMap,DIFF_TYPES.NOT_IN_FS);//Scan though db
+    deltaScanner(fsMap,databaseDump,DIFF_TYPES.NOT_IN_DB);//Scan through fs
+
+    return returnArray;
+};
+
+module.exports = function(localStorage, PouchDB, fs, StorageService, uuid) {
     let storageService = {};
 
     // //Sillyness because of angular. Acts more like a macro than a function
@@ -105,37 +141,12 @@ module.exports = function(localStorage, PouchDB, fs, StorageService) {
 
     };
 
+
     /**
-     * [delta description]
-     * @param  {[type]} databaseDump - database map
-     * @param  {[type]} fsMap        - fs map
-     * @return {Map}                 - Map in the form of path and difference note
+     * Scan a file system path
+     * @param  {[type]} path   - Path to scan
+     * @return {Promise}       - When resolved a dump map of the FS in the form of path and data
      */
-    let delta = (databaseDump, fsMap)=>{
-        let returnArray = {};
-
-
-        /**
-         * Come up with delta map from a and b. Thin ven diagram. Give us the stuff not in the middle.
-         * @param  {[type]} a         -
-         * @param  {[type]} b         -
-         * @param  {[type]} errorText -
-         */
-        let deltaScanner = (a, b, aText, bText)=>{
-            for(let path in a)
-                if(!b[path])//Is the path even there?
-                    returnArray[path]=`Not in ${bText}`;
-                else if((path[path.length-1]!="/" && a[path].doc.note!=b[path].doc.note))
-                    returnArray[path]="Differs";
-        };
-
-        deltaScanner(databaseDump,fsMap,"db", "fs");//Scan though db
-        deltaScanner(fsMap,databaseDump,"fs", "db");//Scan through fs
-
-        return returnArray;
-    };
-
-    //TODO
     let scanFS = (path) => {
         return new Promise((resolve, reject) => {
             let i = 0;
@@ -149,7 +160,7 @@ module.exports = function(localStorage, PouchDB, fs, StorageService) {
                     contents.forEach((item)=>{
                         let fullPath = path+item;
                         if(fs.statSync(fullPath).isDirectory()){//Folder
-                            returnMap[fullPath+"/"] = {};
+                            returnMap[fullPath+"/"] = {doc:{}};
                             counter ++;
                             return internalFunction(fullPath+"/");
                         }
@@ -172,7 +183,9 @@ module.exports = function(localStorage, PouchDB, fs, StorageService) {
         });
     };
 
-    //TODO
+    /**
+     * Initialize the storage service
+     */
     let init = ()=>{
         return new Promise((resolve, reject) => {
             StorageService.call(storageService, localStorage, PouchDB, {
@@ -189,8 +202,63 @@ module.exports = function(localStorage, PouchDB, fs, StorageService) {
         });
     };
 
+    /**
+     * Save fs changes in diff to the DB
+     * @param  {[type]} diff         - Map of what to save
+     * @param  {[type]} databaseDump - Database state
+     * @param  {[type]} fsMap        - FS state
+     */
+    let saveToDB = (diff, databaseDump, fsMap)=>{
+        //TODO tags
+
+        for(let path in diff){
+            let isFolder = path[path.length-1]=="/";
+            switch(diff[path]){
+                case DIFF_TYPES.NOT_IN_FS:
+                    if(isFolder)
+                        storageService.deleteFolder(path);
+                    else
+                        storageService.database().remove(databaseDump[path].doc);
+
+                    console.log(`${path} deleted`);
+                    break;
+                case DIFF_TYPES.NOT_IN_DB:
+                    let lastIndex = path.substring(0,path.length-1).lastIndexOf("/");
+                    let parentPath = path.substring(0,lastIndex+1);
+
+                    //Figure out parent ID
+                    let parentFolderID = null;
+                    if(databaseDump[parentPath])
+                        parentFolderID=databaseDump[parentPath].id;
+                    if(fsMap[parentPath])
+                        parentFolderID=fsMap[parentPath].doc._id;//This works because a map is ordered so folders get ids first
+
+                    if(isFolder){//Folder
+                        fsMap[path].doc.type = "folder";
+                        fsMap[path].doc.name = path.substring(lastIndex+1,isFolder ? path.length-1: path.length);
+                    }
+                    else{//Note
+                        fsMap[path].doc.type = "note";
+                        fsMap[path].doc.title = path.substring(lastIndex+1,isFolder ? path.length-1: path.length);
+                    }
+
+                    fsMap[path].doc._id=uuid();
+                    fsMap[path].doc.parentFolderID=parentFolderID;
+
+                    storageService.database().put(fsMap[path].doc);
+                    console.log(`${path} created`);
+                    break;
+                case DIFF_TYPES.DIFFERS:
+                    databaseDump[path].doc.note = fsMap[path].doc.note;
+                    storageService.database().put(databaseDump[path].doc);
+                    console.log(`${path} updated`);
+                    break;
+            }
+        }
+    };
+
     //Methods we expose
-    return {
+    let methods = {
         // Kick off a sync
         sync: init,
 
@@ -199,7 +267,7 @@ module.exports = function(localStorage, PouchDB, fs, StorageService) {
          * @param  {[type]} url [description]
          */
         config: (url) => { //TODO path parameter for initial path prefix
-            StorageService.call(storageService, localStorage); //Init the object
+            StorageService.call(storageService, localStorage, PouchDB); //Init the object
             storageService.setRemoteURL(url);
         },
 
@@ -217,20 +285,41 @@ module.exports = function(localStorage, PouchDB, fs, StorageService) {
             });
         },
 
+        /**
+         * Show difference between database and fs
+         * @param  {[type]} pathPrefix [description]
+         * @return
+         */
         delta: (pathPrefix)=>{
-            init();
-            scanFS(pathPrefix).then((fsMap)=>{
-                dumpDatabase(storageService.database(), pathPrefix).then((databaseDump) => {
-                    console.log(JSON.stringify(delta(databaseDump, fsMap), null, 4));
-                });
+            return new Promise((resolve, reject) => {
+                init();
+                scanFS(pathPrefix).then((fsMap)=>{
+                    dumpDatabase(storageService.database(), pathPrefix).then((databaseDump) => {
+                        resolve({
+                            delta: delta(databaseDump, fsMap),
+                            databaseDump,
+                            fsMap
+                        });
+                    });
+                }).catch(reject);
             });
         },
 
-        returnMap: () => {
-            dumpDatabase(storageService.database(), "/").then((returnMap) => {
-                console.log(JSON.stringify(returnMap, null, 4)); //TODO Scan FS and note changes
-                //TODO basically make a function that builds a map with the same structure from the file system state and compare them
+        /**
+         * [delta description]
+         * @param  {[type]} pathPrefix [description]
+         * @param  {[type]} pathToSaveRegex [description]
+         * @return {[type]}            [description]
+         */
+        save: (pathPrefix, pathToSaveRegex)=>{
+            methods.delta(pathPrefix).then((data)=>{
+                //TODO pathToSaveRegex regex filter on diff to mimic git add
+                saveToDB(data.delta, data.databaseDump, data.fsMap);
             });
-        }
+        },
+
+
     };
+
+    return methods;
 };
