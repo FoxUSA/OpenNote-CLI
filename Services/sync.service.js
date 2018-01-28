@@ -34,37 +34,20 @@ let delta = (databaseDump, fsMap)=>{
     return returnArray;
 };
 
-module.exports = function(localStorage, PouchDB, fs, StorageService, TagService, uuid) {
+/**
+ * Factory
+ * @param  {[type]} dotOpenNotePath [description]
+ * @param  {[type]} localStorage    [description]
+ * @param  {[type]} PouchDB         [description]
+ * @param  {[type]} fs              [description]
+ * @param  {[type]} StorageService  [description]
+ * @param  {[type]} TagService      [description]
+ * @param  {[type]} uuid            [description]
+ * @return {[type]}                 - Exposed methods
+ */
+module.exports = function(dotOpenNotePath,localStorage, PouchDB, fs, StorageService, TagService, uuid) {
     let storageService = {};
     let tagService = {};
-
-    // //Sillyness because of angular. Acts more like a macro than a function
-    // StorageService.call(storageService, localStorage, PouchDB, {
-    //     options: {
-    //         live: false
-    //     },
-    //     callback: function(syncObject) {
-    //         syncObject.on("complete", function() { //Param info
-    //             //makeFiles(`${__dirname}/test/`, storageService.database()); //FIXME should be somewhere else. Also path parameter
-    //         }); //.on("error", function(error) {
-    //         //     //console.error(`Replication error: ${JSON.stringify(error)}`);
-    //         // }).on("paused", function(error) {
-    //         //     //console.log(`Replication timeout: ${JSON.stringify(error)}`);
-    //         //     if (!replicationTimeout)
-    //         //         replicationTimeout = setTimeout(function() {
-    //         //             console.log("Replication timeout");
-    //         //             replicationTimeout = null;
-    //         //         }, 1000);
-    //         // }).on("active", function() {
-    //         //     //console.log(`Replication active`);
-    //         // }).on("denied", function(error) {
-    //         //     //console.log(`Replication denied: ${JSON.stringify(error)}`);
-    //         // }).on("change", function(info) {
-    //         //     //console.log(`Replication change: ${JSON.stringify(info)}`);
-    //         //});
-    //     }
-    // });
-
 
     /**
      * Write a database dump to the fs
@@ -154,12 +137,15 @@ module.exports = function(localStorage, PouchDB, fs, StorageService, TagService,
             let counter = 1;
             let returnMap = {};
             let internalFunction = (path) => {
-
                 fs.readdir(path, (error, contents) => {
                     if (error)
                         return reject(error);
                     contents.forEach((item)=>{
                         let fullPath = path+item;
+
+                        if (fullPath==dotOpenNotePath || fullPath==dotOpenNotePath.substring(0,dotOpenNotePath.length-1))
+                            return;//Ignore .openNote folder
+
                         if(fs.statSync(fullPath).isDirectory()){//Folder
                             returnMap[fullPath+"/"] = {doc:{}};
                             counter ++;
@@ -196,7 +182,8 @@ module.exports = function(localStorage, PouchDB, fs, StorageService, TagService,
                 callback: (syncObject) => {
                     syncObject.on("complete", resolve).on("error", reject);
                 }
-            });
+            },
+            dotOpenNotePath);
 
             //Execute
             storageService.init();
@@ -272,10 +259,10 @@ module.exports = function(localStorage, PouchDB, fs, StorageService, TagService,
 
         /**
          * Set config variables.
-         * @param  {[type]} url [description]
+         * @param  {[type]} url - Remote couchDB url to save in localstorage
          */
-        config: (url) => { //TODO path parameter for initial path prefix
-            StorageService.call(storageService, localStorage, PouchDB); //Init the object
+        config: (url) => {
+            StorageService.call(storageService, localStorage, PouchDB); //Minimal Init the object
             storageService.setRemoteURL(url);
         },
 

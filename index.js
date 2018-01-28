@@ -3,20 +3,21 @@ const PouchDB = require("pouchdb");
 const uuidv4 = require("uuid/v4");
 const fs = require("fs");
 const package_json = require(`${__dirname}/package.json`); // Yes you can do this. Go scream in a stlye gide somewhere if you have a problem with it
-const StorageService = require("../OpenNote-SharedServices/Storage.service.js");
-const TagService = require("../OpenNote-SharedServices/Tag.service.js");
+const StorageService = require(`${__dirname}/../OpenNote-SharedServices/Storage.service.js`);
+const TagService = require(`${__dirname}/../OpenNote-SharedServices/Tag.service.js`);
+const CWD = process.cwd()+"/";
+const dotOpenNotePath = CWD+".openNote/";
 if (typeof localStorage === "undefined" || localStorage === null) {
     var LocalStorage = require("node-localstorage").LocalStorage;
     /*jshint -W020 *///Tell JS to ignore next line
-    localStorage = new LocalStorage("./openNote");
+    localStorage = new LocalStorage(dotOpenNotePath);
 }
 
-const syncService = require(`${__dirname}/Services/sync.service.js`)(localStorage, PouchDB, fs, StorageService, TagService, uuidv4);
+const syncService = require(`${__dirname}/Services/sync.service.js`)(dotOpenNotePath, localStorage, PouchDB, fs, StorageService, TagService, uuidv4);
 let logError = (error) => {
     console.error(error);
 };
 
-//Global info
 program .version(package_json.version)
         .description("CLI client for OpenNote");
 
@@ -27,14 +28,14 @@ program .command("sync")
         .action((args) => {
             syncService.sync().then(()=>{
                 if(args.mode=="write")
-                    syncService.makeFiles(`${__dirname}/testingNotes/`);//FIXME maybe a setup command to figure this path out
+                    syncService.makeFiles(CWD);
 
             }).catch(logError);
         });
 
 //Config command
 program .command("config")
-        .description("Setup required properties")
+        .description("Creates .openNote folder and sets replication url required properties")
         .argument("<url>", "Sync url in the form of {protocol}://{user}:{password}@{url}:{port}/{database}")
         .action((args) => {
             syncService.config(args.url);
@@ -44,7 +45,7 @@ program .command("config")
 //Delta command
 program .command("delta")
         .action(() => {
-            syncService.delta(`${__dirname}/testingNotes/`).then((data)=>{//FIXME path
+            syncService.delta(CWD).then((data)=>{
                 console.log(JSON.stringify(data.delta, null, 4));
             });
         });
@@ -54,8 +55,7 @@ program .command("delta")
 //Save command
 program .command("save")
         .action(() => {
-            //TODO optinally and sync
-            syncService.save(`${__dirname}/testingNotes/`);//FIXME path
+            syncService.save(CWD);
         });
 
 //Execute
