@@ -34,12 +34,13 @@ let delta = (databaseDump, fsMap)=>{
     return returnArray;
 };
 
-module.exports = function(localStorage, PouchDB, fs, StorageService, uuid) {
+module.exports = function(localStorage, PouchDB, fs, StorageService, TagService, uuid) {
     let storageService = {};
+    let tagService = {};
 
     // //Sillyness because of angular. Acts more like a macro than a function
     // StorageService.call(storageService, localStorage, PouchDB, {
-    //     config: {
+    //     options: {
     //         live: false
     //     },
     //     callback: function(syncObject) {
@@ -189,7 +190,7 @@ module.exports = function(localStorage, PouchDB, fs, StorageService, uuid) {
     let init = ()=>{
         return new Promise((resolve, reject) => {
             StorageService.call(storageService, localStorage, PouchDB, {
-                config: {
+                options: {
                     live: false
                 },
                 callback: (syncObject) => {
@@ -199,6 +200,7 @@ module.exports = function(localStorage, PouchDB, fs, StorageService, uuid) {
 
             //Execute
             storageService.init();
+            tagService = TagService(storageService);
         });
     };
 
@@ -209,29 +211,35 @@ module.exports = function(localStorage, PouchDB, fs, StorageService, uuid) {
      * @param  {[type]} fsMap        - FS state
      */
     let saveToDB = (diff, databaseDump, fsMap)=>{
-        //TODO tags
-
         for(let path in diff){
             let isFolder = path[path.length-1]=="/";
             switch(diff[path]){
-                case DIFF_TYPES.NOT_IN_FS:
-                    if(isFolder)
-                        storageService.deleteFolder(path);
-                    else
+                case DIFF_TYPES.NOT_IN_FS://Delete
+                    if(isFolder){
+                        tagService.deleteFolder(databaseDump[path].doc).then(()=>{
+                            storageService.deleteFolder(databaseDump[path].doc);
+                        });
+                    }
+                    else{
+                        tagService.deleteNote(databaseDump[path].doc);
                         storageService.database().remove(databaseDump[path].doc);
+                    }
 
                     console.log(`${path} deleted`);
                     break;
-                case DIFF_TYPES.NOT_IN_DB:
+
+                case DIFF_TYPES.NOT_IN_DB://Create
                     let lastIndex = path.substring(0,path.length-1).lastIndexOf("/");
                     let parentPath = path.substring(0,lastIndex+1);
 
+                    fsMap[path].doc._id=uuid();
+
                     //Figure out parent ID
-                    let parentFolderID = null;
+                    fsMap[path].doc.parentFolderID = null;
                     if(databaseDump[parentPath])
-                        parentFolderID=databaseDump[parentPath].id;
+                        fsMap[path].doc.parentFolderID=databaseDump[parentPath].id;
                     if(fsMap[parentPath])
-                        parentFolderID=fsMap[parentPath].doc._id;//This works because a map is ordered so folders get ids first
+                        fsMap[path].doc.parentFolderID=fsMap[parentPath].doc._id;//This works because a map is ordered so folders get ids first
 
                     if(isFolder){//Folder
                         fsMap[path].doc.type = "folder";
@@ -240,16 +248,16 @@ module.exports = function(localStorage, PouchDB, fs, StorageService, uuid) {
                     else{//Note
                         fsMap[path].doc.type = "note";
                         fsMap[path].doc.title = path.substring(lastIndex+1,isFolder ? path.length-1: path.length);
+                        tagService.saveNote(fsMap[path].doc);
                     }
-
-                    fsMap[path].doc._id=uuid();
-                    fsMap[path].doc.parentFolderID=parentFolderID;
 
                     storageService.database().put(fsMap[path].doc);
                     console.log(`${path} created`);
                     break;
-                case DIFF_TYPES.DIFFERS:
+
+                case DIFF_TYPES.DIFFERS: //Modify
                     databaseDump[path].doc.note = fsMap[path].doc.note;
+                    tagService.saveNote(databaseDump[path].doc);
                     storageService.database().put(databaseDump[path].doc);
                     console.log(`${path} updated`);
                     break;
