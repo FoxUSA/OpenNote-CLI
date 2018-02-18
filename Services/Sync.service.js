@@ -68,11 +68,10 @@ module.exports = function(dotOpenNotePath,localStorage, PouchDB, fs, StorageServ
 
     /**
      * Dumps a specified database contents to the specified path
-     * @param  {[type]} database   - database to dump
      * @param  {[type]} pathPrefix - Path you wish to write to. All path are generated using this prefix
      * @return {Promise}            - Promise with resolver that contains return map
      */
-    let dumpDatabase = (database, pathPrefix) => {
+    let dumpDatabase = (pathPrefix) => {
         let returnMap = {};
         let promises = [];
 
@@ -95,10 +94,7 @@ module.exports = function(dotOpenNotePath,localStorage, PouchDB, fs, StorageServ
             promises.push(new Promise((resolve, reject) => {
                 if (folderID === undefined)
                     folderID = null; // In case it isnt specified
-                return database.query("parentFolderID", {
-                    key: folderID,
-                    include_docs: true
-                }).then((items) => {
+                return storageService.loadFolderContents(folderID).then((items) => {
                     //Create Notes
                     items.rows.filter(storageService.noteFilter).forEach((note) => {
                         let fullPath = `${pathPrefix}${note.doc.title}`;
@@ -209,7 +205,7 @@ module.exports = function(dotOpenNotePath,localStorage, PouchDB, fs, StorageServ
                     }
                     else{
                         tagService.deleteNote(databaseDump[path].doc);
-                        storageService.database().remove(databaseDump[path].doc);
+                        storageService.delete(databaseDump[path].doc);
                     }
 
                     console.log(`${path} deleted`);
@@ -238,14 +234,14 @@ module.exports = function(dotOpenNotePath,localStorage, PouchDB, fs, StorageServ
                         tagService.saveNote(fsMap[path].doc);
                     }
 
-                    storageService.database().put(fsMap[path].doc);
+                    storageService.put(fsMap[path].doc);
                     console.log(`${path} created`);
                     break;
 
                 case DIFF_TYPES.DIFFERS: //Modify
                     databaseDump[path].doc.note = fsMap[path].doc.note;
                     tagService.saveNote(databaseDump[path].doc);
-                    storageService.database().put(databaseDump[path].doc);
+                    storageService.put(databaseDump[path].doc);
                     console.log(`${path} updated`);
                     break;
             }
@@ -267,7 +263,7 @@ module.exports = function(dotOpenNotePath,localStorage, PouchDB, fs, StorageServ
         },
 
         /**
-         * /Actually dump DB to folder
+         * /Actually dump DB to folder. Sync should be run first to initialize storageService
          * @param  {[type]} pathPrefix - path to write files to
          * @return {[type]}            [description]
          */
@@ -275,7 +271,7 @@ module.exports = function(dotOpenNotePath,localStorage, PouchDB, fs, StorageServ
             if (!fs.existsSync(pathPrefix))
                 fs.mkdirSync(pathPrefix);
 
-            dumpDatabase(storageService.database(), pathPrefix).then((returnMap) => {
+            dumpDatabase(pathPrefix).then((returnMap) => {
                 writeDatabase(returnMap);
             });
         },
@@ -289,7 +285,7 @@ module.exports = function(dotOpenNotePath,localStorage, PouchDB, fs, StorageServ
             return new Promise((resolve, reject) => {
                 init();
                 scanFS(pathPrefix).then((fsMap)=>{
-                    dumpDatabase(storageService.database(), pathPrefix).then((databaseDump) => {
+                    dumpDatabase(pathPrefix).then((databaseDump) => {
                         resolve({
                             delta: delta(databaseDump, fsMap),
                             databaseDump,

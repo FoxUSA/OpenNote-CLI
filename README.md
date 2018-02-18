@@ -70,4 +70,4 @@ You could but I have no idea why you would want to. Its basically Git without th
 No.
 
 ### I don't like _______ please fix it!
-No. This code is Open Source Software (OSS). You are welcome to take the code and fork it.
+This code is Open Source Software (OSS). You are welcome to take the code and fork it.

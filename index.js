@@ -13,11 +13,20 @@ if (typeof localStorage === "undefined" || localStorage === null) {
     localStorage = new LocalStorage(dotOpenNotePath);
 }
 
-const syncService = require(`${__dirname}/Services/sync.service.js`)(dotOpenNotePath, localStorage, PouchDB, fs, StorageService, TagService, uuidv4);
+const syncService = require(`${__dirname}/Services/Sync.service.js`)(dotOpenNotePath, localStorage, PouchDB, fs, StorageService, TagService, uuidv4);
+const fileService = require(`${__dirname}/Services/File.service.js`)(dotOpenNotePath, localStorage, PouchDB, fs, StorageService);//TODO remove next version
+
+
+//Error handeling
 let logError = (error) => {
     console.error(error);
 };
 
+process.on("unhandledRejection", error => {
+  console.error(JSON.stringify(error)); //Catch and print out errors we are not catching
+});
+
+//Program definition
 program .version(package_json.version)
         .description("CLI client for OpenNote");
 
@@ -51,9 +60,29 @@ program .command("delta")
         });
 
 
+//upgrade command //TODO remove in next version
+program .command("upgrade")
+        .description("Moves files from the legacy opennote php service to s3/Minio file storage. Expects path to uploads.json")
+        .option("--jsonPath <jsonPath>", "Path to upload.json. Example: ./uploads.json")
+        .option("--legacyServiceUrl <legacyServiceUrl>", "Old service url. For example https://example.com")
+        .option("--s3Url <s3Url>", "URL of S3 API.")
+        .option("--bucket <bucket", "name of S3 bucket")
+        .option("--accessKey <accessKey>", "S3 access key")
+        .option("--secretKey <secretKey>", "S3 secret key")
+        .action((args,options) => {
+            fileService.upgrade(    options.legacyServiceUrl,
+                                    options.jsonPath,
+                                    {
+                                        s3URL:options.s3Url,
+                                        bucket:options.bucket,
+                                        accessKey:options.accessKey,
+                                        secretKey:options.secretKey
+                                    });
+        });
 
 //Save command
 program .command("save")
+        .description("Save file changes to the local database")
         .action(() => {
             syncService.save(CWD);
         });
