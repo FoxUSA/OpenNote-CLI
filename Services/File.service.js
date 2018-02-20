@@ -1,6 +1,3 @@
-//TODO dowload file and reupload
-//TODO make signed url
-//TODO change the db notes to point to new url
 //FIXME This code is teporary and will be removed next release
 const request = require("request");
 const AWS = require("aws-sdk");
@@ -14,8 +11,8 @@ const LINK_REGEX_INDEX={
 };
 
 const LINK_REGEX = [
-    /<(img|a)[^>]*\/upload\/([^"]*)"(?:>([^<]*)<)?[^\/]*[^>]*>/ig,
-    /<(img|a)[^>]*\/service(?:.php)?\/file\/([^"]*)"(?:>([^<]*)<)?[^\/]*[^>]*>/ig
+    /<(img|a)[^>]*\/upload\/([^"<>]*)"(?:>([^<]*)<)?[^\/]*[^<>]*>/ig,
+    /<(img|a)[^>]*\/service(?:.php)?\/file\/([^"<>]*)"(?:>([^<>]*)<)?[^\/]*[^<>]*>/ig
 ];
 
 /**
@@ -110,11 +107,18 @@ let updateHTMLFactory = (uploads,s3, s3Credentials, discoverUploads=true)=>{
  */
 let moveFiles= (s3,s3Credentials,fs ,serverURL,uploads)=>{
     let workerFunction = (uploads,index, callback)=>{
+        //Handle next
         let next = ()=>{
             if(index<uploads.length)
                 return workerFunction(uploads,index,callback);
             else
                 return callback();
+        };
+
+        //Handle errors
+        let errorNext = (error)=>{
+            console.error(`Error uploading:${file.originalName}\n${JSON.stringify(error)}`);
+            return next();
         };
 
         let file = uploads[index];
@@ -132,16 +136,22 @@ let moveFiles= (s3,s3Credentials,fs ,serverURL,uploads)=>{
         let stream = request(`${serverURL}/OpenNote/Service/upload/${file.diskName}`).pipe(fs.createWriteStream(downloadPath));
         stream.on("finish", ()=>{
             index++;
+            if (!fs.existsSync(downloadPath))
+                return errorNext("File does not exist");
+            let stream = fs.createReadStream(downloadPath);
+
             console.log(`Downloaded ${index}/${uploads.length}`);
             s3.upload({ // https://github.com/minio/cookbook/blob/master/docs/aws-sdk-for-javascript-with-minio.md
                 Bucket: s3Credentials.bucket,
                 Key: `${file.id}/${file.originalName}`,
-                Body: fs.createReadStream(downloadPath)}, (err)=> {
-                    if(err)
-                        throw err;
+                Body: stream}, (error)=> {
+                    if(error)
+                        return errorNext(error);
 
                 return next();
             });
+
+
 
         });
     };

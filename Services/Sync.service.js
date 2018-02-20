@@ -132,7 +132,7 @@ module.exports = function(dotOpenNotePath,localStorage, PouchDB, fs, StorageServ
             let i = 0;
             let counter = 1;
             let returnMap = {};
-            let internalFunction = (path) => {
+            let internalFunction = (path, skipFiles=false) => {
                 fs.readdir(path, (error, contents) => {
                     if (error)
                         return reject(error);
@@ -148,6 +148,8 @@ module.exports = function(dotOpenNotePath,localStorage, PouchDB, fs, StorageServ
                             return internalFunction(fullPath+"/");
                         }
                         else{//Files
+                            if(skipFiles)//Used mostly to remove root level files
+                                return;
                             returnMap[fullPath] = {
                                 doc:{
                                     note: fs.readFileSync(fullPath).toString()
@@ -162,7 +164,7 @@ module.exports = function(dotOpenNotePath,localStorage, PouchDB, fs, StorageServ
                 });
             };
 
-            internalFunction(path); //Start the engine
+            internalFunction(path,true); //Start the engine
         });
     };
 
@@ -304,7 +306,7 @@ module.exports = function(dotOpenNotePath,localStorage, PouchDB, fs, StorageServ
          */
         save: (pathPrefix, pathToSaveRegex)=>{
             methods.delta(pathPrefix).then((data)=>{
-                //TODO pathToSaveRegex regex filter on diff to mimic git add
+                //TODO pathToSaveRegex regex filter on diff to mimic git add or use prefix
                 saveToDB(data.delta, data.databaseDump, data.fsMap);
             });
         },
