@@ -5,8 +5,11 @@ Open Note CLI is, well, a CLI client for OpenNote.
 
 ## Install
 
-This is designed to be installed in your path. This is for multiple notebook support. Much like Git, to have another notebook just create another folder somewhere. The `.openNote` contains localDB and CouchDB replication url.
-//TODO How to install it in your path
+This is designed to be installed in your path. This is for multiple notebook support. Much like Git, to have another notebook just create another folder somewhere. The `.openNote` contains localDB and CouchDB replication url. Then install in your path
+```
+sudo cp opennote-cli-linux /usr/local/bin/opennote
+sudo cp -r node_modules/ /usr/local/bin/
+```
 
 ## Help file
 ```
@@ -71,3 +74,8 @@ No.
 
 ### I don't like _______ please fix it!
 This code is Open Source Software (OSS). You are welcome to take the code and fork it.
+
+
+### Fun use cases?
+- As a text editor, akin to notepad, in your browser!
+- Use with Git to allow history. Just do a `git init` in the same folder and marvel at the `.git` and `.opennote` support folders.

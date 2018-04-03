@@ -63,7 +63,7 @@ program .command("delta")
 //upgrade command //TODO remove in next version
 program .command("upgrade")
         .description("Moves files from the legacy opennote php service to s3/Minio file storage. Expects path to uploads.json")
-        .option("--jsonPath <jsonPath>", "Path to upload.json. Example: ./uploads.json")
+        .option("--jsonPath <jsonPath>", "Path to upload.json. Example: ./uploads.json")//FIXME path aways expects to be relative. If you pass in an absolute one it breaks
         .option("--legacyServiceUrl <legacyServiceUrl>", "Old service url. For example https://example.com")
         .option("--s3Url <s3Url>", "URL of S3 API.")
         .option("--bucket <bucket", "name of S3 bucket")

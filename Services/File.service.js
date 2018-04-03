@@ -208,7 +208,7 @@ module.exports = function(dotOpenNotePath, localStorage, PouchDB, fs, StorageSer
                 storageService.init();
                 storageService.allDocs().then((result)=>{
                     result.rows.forEach((doc)=>{
-                        if (!storageService.typeFilter(doc, "note"))//We only want notes
+                        if (!storageService.noteFilter(doc))//We only want notes
                             return;
 
                         //Convert
@@ -229,5 +229,5 @@ module.exports = function(dotOpenNotePath, localStorage, PouchDB, fs, StorageSer
         }
     };
 
-    //TODO Show list of orphans
+    //TODO Show list of orphans. Files that do not appear in notes.
 };
