@@ -196,58 +196,84 @@ module.exports = function(dotOpenNotePath,localStorage, PouchDB, fs, StorageServ
      * @param  {[type]} fsMap        - FS state
      */
     let saveToDB = (diff, databaseDump, fsMap)=>{
-        for(let path in diff){
-            let isFolder = path[path.length-1]=="/";
-            switch(diff[path]){
-                case DIFF_TYPES.NOT_IN_FS://Delete
-                    if(isFolder){
-                        tagService.deleteFolder(databaseDump[path].doc).then(()=>{
-                            storageService.deleteFolder(databaseDump[path].doc);
+        return new Promise((resolve, reject) =>{
+
+            /**
+             * Syncronous loop instead of 4 loop so there is no contention on the tagMap object
+             * @param  {[type]} i [description]
+             * @return {[type]}   [description]
+             */
+            let syncLoop=(i)=>{
+                if(i>=Object.keys(diff).length)
+                    return resolve();
+
+                let path = Object.keys(diff)[i];
+                let isFolder = path[path.length-1]=="/";
+                switch(diff[path]){
+                    case DIFF_TYPES.NOT_IN_FS://Delete
+                        if(isFolder){
+                            tagService.deleteFolder(databaseDump[path].doc).then(()=>{
+                                storageService.deleteFolder(databaseDump[path].doc).then(()=>{
+                                    return syncLoop(i+1);
+                                });
+                            });
+                        }
+                        else{
+                            tagService.deleteNote(databaseDump[path].doc).then(()=>{
+                                storageService.delete(databaseDump[path].doc).then(()=>{
+                                    return syncLoop(i+1);
+                                });
+                            });
+
+                        }
+
+                        console.log(`${path} deleted`);
+                        break;
+
+                    case DIFF_TYPES.NOT_IN_DB://Create
+                        let lastIndex = path.substring(0,path.length-1).lastIndexOf("/");
+                        let parentPath = path.substring(0,lastIndex+1);
+
+
+                        fsMap[path].doc._id=uuid();
+
+                        //Figure out parent ID
+                        fsMap[path].doc.parentFolderID = databaseDump[parentPath].doc._id || fsMap[parentPath].doc._id;//This works because a map is ordered so folders get ids first
+
+                        if(isFolder){//Folder
+                            fsMap[path].doc.type = "folder";
+                            fsMap[path].doc.name = path.substring(lastIndex+1,isFolder ? path.length-1: path.length);
+                            storageService.put(fsMap[path].doc).then(()=>{
+                                return syncLoop(i+1);
+                            });
+                        }
+                        else{//Note
+                            fsMap[path].doc.type = "note";
+                            fsMap[path].doc.title = path.substring(lastIndex+1,isFolder ? path.length-1: path.length);
+                            tagService.saveNote(fsMap[path].doc).then(()=>{
+                                storageService.put(fsMap[path].doc).then(()=>{
+                                    return syncLoop(i+1);
+                                });
+                            });
+                        }
+
+                        console.log(`${path} created`);
+                        break;
+
+                    case DIFF_TYPES.DIFFERS: //Modify
+                        databaseDump[path].doc.note = fsMap[path].doc.note;
+                        tagService.saveNote(databaseDump[path].doc).then(()=>{
+                            storageService.put(databaseDump[path].doc).then(()=>{
+                                return syncLoop(i+1);
+                            });
                         });
-                    }
-                    else{
-                        tagService.deleteNote(databaseDump[path].doc);
-                        storageService.delete(databaseDump[path].doc);
-                    }
+                        console.log(`${path} updated`);
+                        break;
+                }
+            };
 
-                    console.log(`${path} deleted`);
-                    break;
-
-                case DIFF_TYPES.NOT_IN_DB://Create
-                    let lastIndex = path.substring(0,path.length-1).lastIndexOf("/");
-                    let parentPath = path.substring(0,lastIndex+1);
-
-                    fsMap[path].doc._id=uuid();
-
-                    //Figure out parent ID
-                    fsMap[path].doc.parentFolderID = null;
-                    if(databaseDump[parentPath])
-                        fsMap[path].doc.parentFolderID=databaseDump[parentPath].id;
-                    if(fsMap[parentPath])
-                        fsMap[path].doc.parentFolderID=fsMap[parentPath].doc._id;//This works because a map is ordered so folders get ids first
-
-                    if(isFolder){//Folder
-                        fsMap[path].doc.type = "folder";
-                        fsMap[path].doc.name = path.substring(lastIndex+1,isFolder ? path.length-1: path.length);
-                    }
-                    else{//Note
-                        fsMap[path].doc.type = "note";
-                        fsMap[path].doc.title = path.substring(lastIndex+1,isFolder ? path.length-1: path.length);
-                        tagService.saveNote(fsMap[path].doc);
-                    }
-
-                    storageService.put(fsMap[path].doc);
-                    console.log(`${path} created`);
-                    break;
-
-                case DIFF_TYPES.DIFFERS: //Modify
-                    databaseDump[path].doc.note = fsMap[path].doc.note;
-                    tagService.saveNote(databaseDump[path].doc);
-                    storageService.put(databaseDump[path].doc);
-                    console.log(`${path} updated`);
-                    break;
-            }
-        }
+            syncLoop(0);
+        });
     };
 
     //Methods we expose

@@ -65,6 +65,14 @@ node index.js sync
 
 ---
 
+## Setup development environment
+```
+npm install
+```
+
+
+---
+
 ## FAQ
 ### Can I use this without the web client or CouchDB?
 You could but I have no idea why you would want to. Its basically Git without the branches. IE cookies without sugar. Whole idea is its an eco system. Read and modify notes if you are offline and sync them around.

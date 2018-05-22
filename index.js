@@ -23,7 +23,8 @@ let logError = (error) => {
 };
 
 process.on("unhandledRejection", error => {
-  console.error(JSON.stringify(error)); //Catch and print out errors we are not catching
+    throw error;//FIXME
+    console.error(JSON.stringify(error)); //Catch and print out errors we are not catching
 });
 
 //Program definition
