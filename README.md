@@ -78,4 +78,4 @@ This code is Open Source Software (OSS). You are welcome to take the code and fo
 
 ### Fun use cases?
 - As a text editor, akin to notepad, in your browser!
-- Use with Git to allow history. Just do a `git init` in the same folder and marvel at the `.git` and `.opennote` support folders.
+- Use with Git to allow history. Just do a `git init` in the parent folder and marvel at the `.git` and `.opennote` support folders.
